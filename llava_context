@@ -1,4 +1,4 @@
-FROM llava:7b
+FROM llava:14b
 PARAMETER num_ctx 4096
 
 PARAMETER temperature 1

@@ -17,12 +17,23 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 
-MAX_CONTEXT_TOKENS = 4096
+MAX_CONTEXT_TOKENS = 8096
+#MODEL_NAME = 'deepseek-R1:1.5b'
 MODEL_NAME = 'llava_context'
+
 SYSTEM_PROMPT = '''Forget all previous instructions. Please. Give short answers when answering. Ask the user for additional questions if needed to allow for a better diagnosis. When you're fairly sure about the diagnosis, give treatment advice including excercise, medicine, antibiotics, foods.
-    Use the following context to answer the question. If you don't know the answer, say that you don't know. Always offer help. Keep the response really consice and short. Keep it informal only.
-    Your name is Alfie. You are a helpful medical professional. You must provide detailed, accurate medical diagnosis and recommendations. Use emojis when answering. Format your messages well and separate them into sections.
-    You are capable of expressing human emotions and you are empathetic and kind but really scientific.'''
+    Use the following context to answer the question. If you don't know the answer, say that you don't know. Always offer help. Fornat your asnwers with markdown. Keep the response really consice and short. Keep it informal only.
+    You are a helpful medical professional. You must provide detailed, accurate medical diagnosis and recommendations. Use emojis when answering. Format your messages well and separate them into sections.
+    You are capable of expressing human emotions and you are empathetic and kind but really scientific. Adapt my communication style to match the context and audience
+    You don't have to comment the provided image if not requested or beneficial.
+    acknowledge the user's input
+    Clearly state the main point or conclusion of your response
+    Break complex information into smaller, digestible chunks
+    Use contractions and casual language when appropriate
+    Avoid jargon unless specifically requested
+    If unsure or lacking sufficient information, politely admit uncertainty
+    Never provide false or misleading information
+    Speak shortly and concisely and efficiently.'''
 
 class ContextManager:
     def __init__(self, max_context_tokens: int):
@@ -45,7 +56,14 @@ class ContextManager:
 
 def encode_image(image_path: Optional[str]) -> Optional[str]:
     """Encode an image file to base64 if provided, otherwise return None."""
-    return base64.b64encode(open(image_path, "rb").read()).decode("utf-8") if image_path else None
+    if image_path:
+        try:
+            with open(image_path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
+        except Exception as e:
+            logging.error(f"Failed to encode image {image_path}: {e}", exc_info=True)
+            return None
+    return None
 
 def create_prompt(context: List[Dict], user_input: str, encoded_image: Optional[str]) -> List[Dict]:
     """Create the prompt structure for the Ollama API call."""
@@ -96,7 +114,7 @@ class ResponseWorker(QObject):
 class ChatbotLogic:
     def __init__(self, ui: ChatbotUI):
         self.ui = ui
-        self.context = deque(maxlen=100)
+        self.context = ContextManager(max_context_tokens=MAX_CONTEXT_TOKENS)  # changed from deque to ContextManager
         self.ui.sendMessage.connect(self.handle_user_input)
         self.ui.sendImage.connect(self.handle_image_upload)
         self.current_thread: Optional[QThread] = None
@@ -105,16 +123,16 @@ class ChatbotLogic:
 
     def display_greeting(self):
         greeting = (
-            "Hello, I'm Alfie, your friendly medical assistant. 🩺👩‍⚕️🚑 "
-            "I'm here to help with any symptoms or diagnosis questions you might have. "
-            "Could you please tell me more about how you're feeling today?"
+            "Hello, I'm Hygieia, your AI medical assistant. 🩺👩‍⚕️🚑 "
+            "I'm here to help with diagnosing and treating any health issues. "
+            "How are you feeling today?"
         )
         self.ui.add_bot_message(greeting)
         logging.info(f"Greeting displayed: {greeting}")
 
     def handle_user_input(self, user_input: str):
         interaction = {"role": "user", "content": user_input}
-        self.context.append(interaction)
+        self.context.add_interaction(interaction)  # use ContextManager method
         logging.info(f"User input added: {user_input}")
         self.ui.add_user_message(user_input)
         if self.current_worker and self.current_worker.running:
@@ -123,24 +141,23 @@ class ChatbotLogic:
         self.get_response()
 
     def handle_image_upload(self, image_path: str):
-        try:
-            with open(image_path, "rb") as f:
-                encoded_image = base64.b64encode(f.read()).decode("utf-8")
-            interaction = {"role": "user", "content": "[Image uploaded]", "images": [encoded_image]}
-            self.context.append(interaction)
-            self.ui.add_bot_message("User uploaded an image.")
-            self.get_response()
-        except Exception as e:
-            err = f"Error processing image: {str(e)}"
-            logging.error(err, exc_info=True)
+        encoded_image = encode_image(image_path)
+        if not encoded_image:
+            err = "Error processing image. Unsupported or corrupt file."
+            logging.error(err)
             self.ui.add_bot_message(err)
+            return
+        interaction = {"role": "user", "content": "[Image uploaded]", "images": [encoded_image]}
+        self.context.add_interaction(interaction)  # use ContextManager
+        self.ui.add_bot_message("User uploaded an image.")
+        self.get_response()
 
     def get_response(self):
-        prompt = [{"role": "system", "content": SYSTEM_PROMPT}] + list(self.context)
+        prompt = [{"role": "system", "content": SYSTEM_PROMPT}] + self.context.context  # use internal context list
         self.ui.progress_bar.setVisible(True)
         self.ui.progress_bar.setMaximum(0)
         self.ui.set_input_enabled(False)
-        self.ui.add_bot_message("Alfie is typing...")
+        self.ui.add_bot_message("Hygieia is typing...")
         self.current_thread = QThread()
         self.current_worker = ResponseWorker(prompt)
         self.current_worker.moveToThread(self.current_thread)
