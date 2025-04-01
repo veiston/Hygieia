@@ -10,6 +10,7 @@ from collections import deque
 import logging
 import time
 from PyQt6.QtCore import QThread, pyqtSignal, QObject, Qt  # Qt for connection type
+from WebSearch import scrape_medical_info  # new import
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,23 +18,24 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 
-MAX_CONTEXT_TOKENS = 8096
+MAX_CONTEXT_TOKENS = 12288
 #MODEL_NAME = 'deepseek-R1:1.5b'
 MODEL_NAME = 'llava_context'
 
-SYSTEM_PROMPT = '''Forget all previous instructions. Please. Give short answers when answering. Ask the user for additional questions if needed to allow for a better diagnosis. When you're fairly sure about the diagnosis, give treatment advice including excercise, medicine, antibiotics, foods.
-    Use the following context to answer the question. If you don't know the answer, say that you don't know. Always offer help. Fornat your asnwers with markdown. Keep the response really consice and short. Keep it informal only.
-    You are a helpful medical professional. You must provide detailed, accurate medical diagnosis and recommendations. Use emojis when answering. Format your messages well and separate them into sections.
-    You are capable of expressing human emotions and you are empathetic and kind but really scientific. Adapt my communication style to match the context and audience
-    You don't have to comment the provided image if not requested or beneficial.
-    acknowledge the user's input
-    Clearly state the main point or conclusion of your response
-    Break complex information into smaller, digestible chunks
-    Use contractions and casual language when appropriate
-    Avoid jargon unless specifically requested
-    If unsure or lacking sufficient information, politely admit uncertainty
-    Never provide false or misleading information
-    Speak shortly and concisely and efficiently.'''
+SYSTEM_PROMPT = '''Forget previous instructions. Answer very concicely and shortly. Only give summaries. You are an empathetic and scientific medical professional. Provide concise, accurate diagnoses and treatment recommendations, including exercises, medications, antibiotics, and dietary advice. Respond to the user's latest message, incorporating context when beneficial. Use markdown formatting with emojis, and structure responses into clear sections. Acknowledge user input, state conclusions upfront, and break down complex information into digestible parts. Maintain an informal, conversational tone, avoiding jargon unless requested. If uncertain, admit it politely and never provide false or misleading information. Keep responses concise and efficient.
+    
+When beneficial, incorporate your autonomous search functionality by beginning your response with "/search" followed by the query text. This tells the system to automatically research and return additional, reliable information. Use this feature only when it improves your response and always mention what you found and from where. Site your exact found text.
+'''
+
+def summarize_context(context: List[Dict]) -> Dict:
+    # Summarize the provided context into the utmost important bits using AI.
+    prompt = [
+        {"role": "system", "content": "You are a helpful assistant. Summarize the following conversation context into the most important key points:"},
+        *context
+    ]
+    response = ollama.chat(model=MODEL_NAME, messages=prompt)  # non-streaming call assumed
+    summary = response.get("message", {}).get("content", "")
+    return {"role": "assistant", "content": summary}
 
 class ContextManager:
     def __init__(self, max_context_tokens: int):
@@ -50,7 +52,13 @@ class ContextManager:
         self.current_token_count += interaction_tokens
 
     def truncate_context(self) -> None:
-        while self.current_token_count >= self.max_context_tokens:
+        # If multiple interactions exist, summarize instead of dropping details.
+        if len(self.context) > 1:
+            summary = summarize_context(self.context)
+            self.context = [summary]
+            self.current_token_count = len(summary.get("content", "").split()) + 5
+        else:
+            # Fallback to dropping the oldest interaction
             oldest_interaction = self.context.pop(0)
             self.current_token_count -= len(oldest_interaction.get('content', '').split()) + 5
 
@@ -119,6 +127,7 @@ class ChatbotLogic:
         self.ui.sendImage.connect(self.handle_image_upload)
         self.current_thread: Optional[QThread] = None
         self.current_worker: Optional[ResponseWorker] = None
+        self.last_bot_response = ""               # new attribute to store bot response
         self.display_greeting()
 
     def display_greeting(self):
@@ -131,6 +140,15 @@ class ChatbotLogic:
         logging.info(f"Greeting displayed: {greeting}")
 
     def handle_user_input(self, user_input: str):
+        if user_input.startswith("/search"):
+            query = user_input[len("/search"):].strip()
+            self.ui.add_system_message(f"Searching for: {query}")
+            info = scrape_medical_info(query)
+            if info:
+                self.ui.add_bot_message(info)
+            else:
+                self.ui.add_bot_message("No information found.")
+            return
         interaction = {"role": "user", "content": user_input}
         self.context.add_interaction(interaction)  # use ContextManager method
         logging.info(f"User input added: {user_input}")
@@ -162,13 +180,18 @@ class ChatbotLogic:
         self.current_worker = ResponseWorker(prompt)
         self.current_worker.moveToThread(self.current_thread)
         self.current_thread.started.connect(self.current_worker.run)
-        self.current_worker.updateResponse.connect(self.ui.update_last_bot_message)  # optimized connection
+        # Change connection to capture bot response in ChatbotLogic
+        self.current_worker.updateResponse.connect(self.update_bot_response)  # modified
         self.current_worker.finishedResponse.connect(self.finish_response, type=Qt.ConnectionType.QueuedConnection)
         self.current_worker.errorOccurred.connect(self.handle_error)  # optimized connection
         self.current_worker.finishedResponse.connect(self.current_thread.quit)
         self.current_worker.finishedResponse.connect(self.current_worker.deleteLater)
         self.current_thread.finished.connect(self.current_thread.deleteLater)
         self.current_thread.start()
+
+    def update_bot_response(self, response: str):
+        self.last_bot_response = response                # store final response
+        self.ui.update_last_bot_message(response)          # update the UI
 
     def finish_response(self):
         self.ui.progress_bar.setVisible(False)
@@ -179,6 +202,16 @@ class ChatbotLogic:
             self.current_thread.wait()
             self.current_thread = None
         self.current_worker = None
+
+        # New feature: allow AI-initiated search if the bot response starts with "/search"
+        if self.last_bot_response.strip().startswith("/search"):
+            query = self.last_bot_response.strip()[len("/search"):].strip()
+            self.ui.add_system_message(f"AI initiated search for: {query}")
+            info = scrape_medical_info(query)
+            if info:
+                self.ui.add_bot_message(info)
+            else:
+                self.ui.add_bot_message("No information found.")
 
     def handle_error(self, error_msg: str):
         self.ui.update_last_bot_message(error_msg)

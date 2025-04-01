@@ -1,6 +1,7 @@
 import sys
 import logging
 import markdown
+import anyFileRead  # new import
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTextEdit, QLineEdit, QPushButton,
     QVBoxLayout, QWidget, QFileDialog, QProgressBar, QHBoxLayout, QMessageBox
@@ -43,6 +44,55 @@ class ChatbotUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("Hygieia - Medical AI Chatbot")
         self.setGeometry(100, 100, 600, 500)
+        
+        # Set a global dark style sheet for an elegant, rounded, and beautiful appearance.
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #2E2E2E;
+            }
+            QTextEdit {
+                background-color: #3B3B3B;
+                border: 1px solid #555;
+                border-radius: 10px;
+                padding: 10px;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 14px;
+                color: #EEE;
+            }
+            QLineEdit {
+                background-color: #3B3B3B;
+                border: 1px solid #555;
+                border-radius: 10px;
+                padding: 6px;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 14px;
+                color: #EEE;
+            }
+            QPushButton {
+                background-color: #3A8DFF;
+                border: none;
+                color: white;
+                padding: 8px 16px;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 14px;
+                border-radius: 10px;
+            }
+            QPushButton:hover {
+                background-color: #2C79D1;
+            }
+            QProgressBar {
+                background-color: #555;
+                border: 1px solid #444;
+                border-radius: 10px;
+                text-align: center;
+                color: #EEE;
+            }
+            QProgressBar::chunk {
+                background-color: #3A8DFF;
+                border-radius: 10px;
+            }
+        """)
+        
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         
@@ -128,7 +178,7 @@ class ChatbotUI(QMainWindow):
         input_layout = QHBoxLayout()
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Type your message here...")
-        self.input_field.returnPressed.connect(self.send_text)
+        self.input_field.returnPressed.connect(self.send_text) # send on Enter key
         input_layout.addWidget(self.input_field)
         
         self.send_button = QPushButton("Send")
@@ -138,6 +188,10 @@ class ChatbotUI(QMainWindow):
         self.attach_button = QPushButton("Attach Image")
         self.attach_button.clicked.connect(self.attach_image)
         input_layout.addWidget(self.attach_button)
+        
+        self.import_button = QPushButton("Import File")  # new button
+        self.import_button.clicked.connect(self.import_file)
+        input_layout.addWidget(self.import_button)
         
         self.layout.addLayout(input_layout)
         
@@ -233,6 +287,15 @@ class ChatbotUI(QMainWindow):
         if file_path:
             logging.info(f"User attached image: {file_path}")
             self.sendImage.emit(file_path)
+
+    def import_file(self):
+        """Use anyFileRead to convert file content to text and display it."""
+        file_content = anyFileRead.anyReader()  # call anyReader to get file text
+        if file_content:
+            self.add_system_message("Imported File Content:")
+            self.add_bot_message(str(file_content))
+        else:
+            self.add_system_message("No content imported.")
 
     def clear_conversation(self):
         """Clear the conversation history."""
