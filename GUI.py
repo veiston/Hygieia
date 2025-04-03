@@ -1,6 +1,7 @@
 import sys
 import logging
 import markdown
+import datetime  # added for timestamp
 import anyFileRead  # new import
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTextEdit, QLineEdit, QPushButton,
@@ -45,7 +46,7 @@ class ChatbotUI(QMainWindow):
         self.setWindowTitle("Hygieia - Medical AI Chatbot")
         self.setGeometry(100, 100, 600, 500)
         
-        # Set a global dark style sheet for an elegant, rounded, and beautiful appearance.
+        # Dark style with green accents (changed from blue)
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #2E2E2E;
@@ -69,7 +70,7 @@ class ChatbotUI(QMainWindow):
                 color: #EEE;
             }
             QPushButton {
-                background-color: #3A8DFF;
+                background-color: #28a745;
                 border: none;
                 color: white;
                 padding: 8px 16px;
@@ -78,7 +79,7 @@ class ChatbotUI(QMainWindow):
                 border-radius: 10px;
             }
             QPushButton:hover {
-                background-color: #2C79D1;
+                background-color: #218838;
             }
             QProgressBar {
                 background-color: #555;
@@ -88,7 +89,7 @@ class ChatbotUI(QMainWindow):
                 color: #EEE;
             }
             QProgressBar::chunk {
-                background-color: #3A8DFF;
+                background-color: #28a745;
                 border-radius: 10px;
             }
         """)
@@ -186,10 +187,12 @@ class ChatbotUI(QMainWindow):
         input_layout.addWidget(self.send_button)
         
         self.attach_button = QPushButton("Attach Image")
+        self.attach_button.setToolTip("Attach an image file")  # new tooltip
         self.attach_button.clicked.connect(self.attach_image)
         input_layout.addWidget(self.attach_button)
         
         self.import_button = QPushButton("Import File")  # new button
+        self.import_button.setToolTip("Import a file")  # new tooltip
         self.import_button.clicked.connect(self.import_file)
         input_layout.addWidget(self.import_button)
         
@@ -227,13 +230,16 @@ class ChatbotUI(QMainWindow):
         )
 
     def _format_message(self, message: str, align: str, bg_color: str = None) -> str:
-        """Format a message with WhatsApp-style bubble styling using CSS classes."""
+        """Format a message with WhatsApp-style bubble styling and add a timestamp."""
         converted = markdown.markdown(message)
         message_class = {"right": "user-message", "left": "bot-message", "center": "system-message"}.get(align, "user-message")
+        timestamp = datetime.datetime.now().strftime("%H:%M")
+        align_style = "text-align: right;" if align == "right" else "text-align: left;" if align == "left" else "text-align: center;"
         return f"""
-        <div class="message-container">
+        <div class="message-container" style="{align_style}">
             <div class="message-bubble {message_class}">
-                {converted}
+                {converted}<br>
+                <span style="font-size:10px; color:#999;">{timestamp}</span>
             </div>
         </div>
         """
@@ -258,6 +264,23 @@ class ChatbotUI(QMainWindow):
         self.messages.append(formatted)
         self._render_messages()
         logging.info(f"System message added: {message}")
+
+    def add_user_image_message(self, image_path: str) -> None:
+        """Display an attached image as a user message."""
+        # Prepend file protocol for local images
+        img_tag = f'<img src="file:///{image_path}" style="max-width:80%; border-radius:10px;">'
+        # Use the same formatting as user messages (right-aligned)
+        timestamp = datetime.datetime.now().strftime("%H:%M")
+        message_html = f"""
+        <div class="message-container">
+            <div class="message-bubble user-message">
+                {img_tag}<br>
+                <span style="font-size:10px; color:#999;">{timestamp}</span>
+            </div>
+        </div>
+        """
+        self.messages.append(message_html)
+        self._render_messages()
 
     def update_last_bot_message(self, message: str) -> None:
         """Update the last bot message in the conversation."""
@@ -286,6 +309,7 @@ class ChatbotUI(QMainWindow):
         )
         if file_path:
             logging.info(f"User attached image: {file_path}")
+            self.add_user_image_message(file_path)
             self.sendImage.emit(file_path)
 
     def import_file(self):
