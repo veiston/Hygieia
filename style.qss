@@ -1,0 +1,49 @@
+/* Chatbot UI Styles - black text, larger font */
+QMainWindow { background-color: #23272e; }
+QTextEdit {
+    background-color: #181c22;
+    border: 1px solid #444b57;
+    border-radius: 10px;
+    padding: 10px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 18px;
+    color: #000;
+}
+QLineEdit {
+    background-color: #181c22;
+    border: 1px solid #444b57;
+    border-radius: 10px;
+    padding: 6px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 18px;
+    color: #000;
+}
+QPushButton {
+    background-color: #3b82f6;
+    border: none;
+    color: #fff;
+    padding: 8px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 18px;
+    border-radius: 10px;
+}
+QPushButton:hover { background-color: #2563eb; }
+QPushButton#clearButton {
+    background-color: #23272e;
+    color: #bfc9d1;
+    font-size: 15px;
+    margin-top: 8px;
+}
+QPushButton#clearButton:hover { background-color: #374151; color: #fff; }
+QProgressBar {
+    background-color: #23272e;
+    border: 1px solid #444b57;
+    border-radius: 10px;
+    text-align: center;
+    color: #000;
+    font-size: 18px;
+}
+QProgressBar::chunk {
+    background-color: #3b82f6;
+    border-radius: 10px;
+}
