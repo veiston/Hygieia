@@ -4,7 +4,7 @@ Hygieia is a lightweight, offline-first medical guidance assistant designed to b
 
 This repository contains the desktop GUI, local AI orchestration code, simple web-scraping fact‑checks, and helpers for importing document and image evidence.
 
----
+<img width="598" height="797" alt="Näyttökuva 2025-09-29 020512" src="https://github.com/user-attachments/assets/40dbadd0-959a-4e63-abfc-af9aaef8026f" />
 
 ## Core idea
 
@@ -20,7 +20,7 @@ Give people a fast, empathetic, scientific medical assistant that runs locally o
 - Autonomous fact‑checking: the assistant can initiate or be asked to run a targeted web search (simple scraping) to cite sources.
 - Friendly GUI built with PyQt6 (`GUI.py`) with keyboard shortcuts and a clean chat bubble UI.
 
-<img width="598" height="797" alt="Näyttökuva 2025-09-29 020512" src="https://github.com/user-attachments/assets/40dbadd0-959a-4e63-abfc-af9aaef8026f" />
+---
 
 ## What Hygieia is - and is not
 
