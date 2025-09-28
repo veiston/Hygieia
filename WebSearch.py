@@ -1,4 +1,4 @@
-import requests as hrequests
+import requests as hrequests #hrequests is being a bitch but leaving it here for the future
 import urllib.parse
 from bs4 import BeautifulSoup
 from bs4.element import Tag, NavigableString
