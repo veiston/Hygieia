@@ -4,6 +4,7 @@ from docx import Document
 import PyPDF2
 
 def anyReader(file_path=None):
+    # quick file reader for PDF, PPTX, DOCX
     if not file_path:
         return ''
     ext = os.path.splitext(file_path)[1].lower()
@@ -25,15 +26,17 @@ def anyReader(file_path=None):
             runs = []
             for slide in prs.slides:
                 for shape in slide.shapes:
-                    if not shape.has_text_frame:
+                    tf = getattr(shape, "text_frame", None)
+                    if tf is None:
                         continue
-                    for p in shape.text_frame.paragraphs:
+                    for p in tf.paragraphs:
                         for r in p.runs:
                             runs.append(r.text)
                         runs.append('\n')
             return '\n'.join(runs).strip()
         except Exception as e:
             return f'PPTX read error: {e}'
+        
     if ext == '.docx':
         try:
             doc = Document(file_path)

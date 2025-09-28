@@ -2,11 +2,13 @@ import sys
 import logging
 import markdown
 import datetime
+from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTextEdit, QLineEdit, QPushButton,
     QVBoxLayout, QWidget, QFileDialog, QProgressBar, QHBoxLayout, QMessageBox, QMenu
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, pyqtSlot, QEvent
+from PyQt6.QtGui import QKeyEvent, QDragEnterEvent, QDropEvent
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,10 +27,11 @@ class ChatbotUI(QMainWindow):
         self._is_sending = False
         self._message_history = []
         self._history_index = -1
-        self.layout = QVBoxLayout()
+        self.main_layout = QVBoxLayout()
         central = QWidget()
-        central.setLayout(self.layout)
+        central.setLayout(self.main_layout)
         self.setCentralWidget(central)
+
         self.chat_display = QTextEdit()
         self.chat_display.setReadOnly(True)
         self.chat_display.setAcceptRichText(True)
@@ -36,29 +39,37 @@ class ChatbotUI(QMainWindow):
         self.chat_display.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.chat_display.customContextMenuRequested.connect(self.show_context_menu)
         self.chat_display.setAcceptDrops(True)
-        self.layout.addWidget(self.chat_display)
+        self.main_layout.addWidget(self.chat_display)
+
         input_layout = QHBoxLayout()
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Type your message here...")
         self.input_field.installEventFilter(self)
         input_layout.addWidget(self.input_field)
+
         self.send_button = QPushButton("Send")
         self.send_button.clicked.connect(self.send_text)
         input_layout.addWidget(self.send_button)
+
         self.attach_button = QPushButton("Attach Image")
         self.attach_button.clicked.connect(self.attach_image)
         input_layout.addWidget(self.attach_button)
+
         self.import_button = QPushButton("Import File")
         self.import_button.clicked.connect(self.import_file)
         input_layout.addWidget(self.import_button)
-        self.layout.addLayout(input_layout)
+
+        self.main_layout.addLayout(input_layout)
+
         self.clear_button = QPushButton("Clear Conversation")
         self.clear_button.clicked.connect(self.clear_conversation)
-        self.layout.addWidget(self.clear_button)
+        self.main_layout.addWidget(self.clear_button)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximum(100)
         self.progress_bar.setVisible(False)
-        self.layout.addWidget(self.progress_bar)
+        self.main_layout.addWidget(self.progress_bar)
+
         self.input_field.setFocus()
         self._load_stylesheet()
         self._load_html_template()
@@ -77,8 +88,11 @@ class ChatbotUI(QMainWindow):
         except Exception:
             self.bubble_template = None
 
-    def eventFilter(self, obj, event):
-        if obj == self.input_field and event.type() == QEvent.Type.KeyPress:
+    def eventFilter(self, a0, a1):
+        # handle key events on the input field
+        watched = a0
+        event = a1
+        if watched == self.input_field and isinstance(event, QKeyEvent) and event.type() == QEvent.Type.KeyPress:
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
                     return False
@@ -93,8 +107,9 @@ class ChatbotUI(QMainWindow):
             elif event.key() == Qt.Key.Key_Down and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 self.navigate_history(1)
                 return True
-        return super().eventFilter(obj, event)
+        return super().eventFilter(a0, a1)
     def navigate_history(self, direction):
+        # move through typed messages
         if not self._message_history:
             return
         self._history_index += direction
@@ -103,13 +118,24 @@ class ChatbotUI(QMainWindow):
             self.input_field.clear()
         else:
             self.input_field.setText(self._message_history[self._history_index])
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-    def dropEvent(self, event):
-        for url in event.mimeData().urls():
+    def dragEnterEvent(self, a0):
+        event = a0
+        # allow file drops with URLs
+        if isinstance(event, QDragEnterEvent):
+            md = event.mimeData()
+            if md is not None and hasattr(md, 'hasUrls') and md.hasUrls():
+                event.acceptProposedAction()
+                return
+        return
+
+    def dropEvent(self, a0):
+        event = a0
+        if not isinstance(event, QDropEvent):
+            return
+        md = event.mimeData()
+        if md is None or not hasattr(md, 'urls'):
+            return
+        for url in md.urls():
             file_path = url.toLocalFile()
             if file_path.lower().endswith((".png", ".jpg", ".jpeg", ".bmp")):
                 self.add_user_image_message(file_path)
@@ -139,7 +165,9 @@ class ChatbotUI(QMainWindow):
     def _render_messages(self):
         html = "\n".join(self.messages)
         self.chat_display.setHtml(html)
-        self.chat_display.verticalScrollBar().setValue(self.chat_display.verticalScrollBar().maximum())
+        vsb = self.chat_display.verticalScrollBar()
+        if vsb is not None:
+            vsb.setValue(vsb.maximum())
     def _format_message(self, message: str, align: str) -> str:
         import re
         converted = markdown.markdown(message, extensions=['extra', 'sane_lists', 'smarty'])
@@ -193,7 +221,9 @@ class ChatbotUI(QMainWindow):
         self.messages.append(f)
         self._render_messages()
     def add_user_image_message(self, image_path: str) -> None:
-        img_tag = f'<img src="file:///{image_path}" style="max-width:80%; border-radius:10px;">'
+        p = Path(image_path).absolute()
+        img_src = f"file:///{p.as_posix()}"
+        img_tag = f'<img src="{img_src}" style="max-width:80%; border-radius:10px;">'
         t = datetime.datetime.now().strftime("%H:%M")
         html = f"""
         <div class=\"message-container\">\n            <div class=\"message-bubble user-message\">\n                {img_tag}<br>\n                <span style=\"font-size:10px; border-radius: 45px; color:#999;\">{t}</span>\n            </div>\n        </div>\n        """
@@ -245,4 +275,19 @@ class ChatbotUI(QMainWindow):
         selected_text = cursor.selectedText()
         menu = QMenu(self)
         copy_action = menu.addAction("Copy Message")
+        open_link_action = menu.addAction("Open Link")
         action = menu.exec(self.chat_display.mapToGlobal(pos))
+        if action == copy_action:
+            if selected_text:
+                cb = QApplication.clipboard()
+                if cb is not None and hasattr(cb, 'setText'):
+                    cb.setText(selected_text)
+        elif action == open_link_action:
+            # try to open selected text as URL
+            txt = selected_text.strip()
+            if txt.startswith("http://") or txt.startswith("https://"):
+                import webbrowser
+                webbrowser.open(txt)
+            else:
+                # nothing to open
+                pass

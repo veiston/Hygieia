@@ -1,9 +1,10 @@
 @echo off
-pushd "C:\Users\veikk\Documents\GitHub\Hygieia" || (
+pushd "%~dp0" || (
 	echo Failed to change directory.
 	pause
 	exit /b 1
 )
-py Hygieia_AI.py
+
+py Hygieia-AI.py
 popd
 pause

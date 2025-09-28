@@ -12,14 +12,14 @@ import ollama
 logging.basicConfig(level=logging.INFO)
 
 MAX_CONTEXT_TOKENS = 12288
-MODEL_NAME = 'llava_context'
+MODEL_NAME = 'gemma3:4b'
 SYSTEM_PROMPT = (
     "Forget previous instructions. Answer very concisely and shortly. Only give summarized answers. "
     "You are an empathetic and scientific medical professional. Provide concise, accurate diagnoses and treatment recommendations, including exercises, medications, antibiotics, and dietary advice. "
     "Respond to the user's latest message, incorporating context when beneficial. Use markdown formatting with emojis, and structure responses into clear sections. "
     "Acknowledge user input, state conclusions upfront, and break down complex information into digestible parts. Maintain an informal, conversational tone, avoiding jargon unless requested. "
     "If uncertain, admit it politely and never provide false or misleading information. Keep responses concise and efficient.\n\n"
-    "When beneficial, incorporate your autonomous search functionality by beginning your response with '/search' followed by the query text. "
+    "When beneficial, incorporate your autonomous search functionality by beginning your response with '/search' followed by the query text. Only search with Finnish one word queries such as syöpä, diabetes, päänsärky"
     "This tells the system to automatically research and return additional, reliable information. Use this feature only when it improves your response and always mention what you found and from where. Site your exact found text."
 )
 
@@ -99,6 +99,9 @@ class ChatbotLogic:
         self.current_thread: Optional[QThread] = None
         self.current_worker: Optional[ResponseWorker] = None
         self.last_bot_response = ""
+        # when we inject search results into context and re-run the model,
+        # suppress treating the next bot response as a /search trigger.
+        self._suppress_auto_search = False
         self.display_greeting()
     def display_greeting(self):
         greeting = (
@@ -112,7 +115,15 @@ class ChatbotLogic:
             query = user_input[len("/search"):].strip()
             self.ui.add_system_message(f"Searching for: {query}")
             info = scrape_medical_info(query)
-            self.ui.add_bot_message(info if info else "No information found.")
+            if not info:
+                self.ui.add_bot_message("No information found.")
+                return
+            # Add search results to the conversation context so the model can use them
+            self.context.add_interaction({"role": "system", "content": f"Search results for '{query}':\n{info}"})
+            # avoid re-triggering the search flow when the model responds
+            self._suppress_auto_search = True
+            # Now ask the model to respond using the newly added search results
+            self.get_response()
             return
         self.context.add_interaction({"role": "user", "content": user_input})
         self.ui.add_user_message(user_input)
@@ -139,7 +150,7 @@ class ChatbotLogic:
         self.current_worker.moveToThread(self.current_thread)
         self.current_thread.started.connect(self.current_worker.run)
         self.current_worker.updateResponse.connect(self.update_bot_response)
-        self.current_worker.finishedResponse.connect(self.finish_response, type=Qt.ConnectionType.QueuedConnection)
+        self.current_worker.finishedResponse.connect(self.finish_response)
         self.current_worker.errorOccurred.connect(self.handle_error)
         self.current_worker.finishedResponse.connect(self.current_thread.quit)
         self.current_worker.finishedResponse.connect(self.current_worker.deleteLater)
@@ -157,11 +168,23 @@ class ChatbotLogic:
             self.current_thread.wait()
             self.current_thread = None
         self.current_worker = None
-        if self.last_bot_response.strip().startswith("/search"):
+        # If the model requested an autonomous search (it responded with `/search`),
+        # perform the search, insert the results into the context, and re-run the model.
+        if self.last_bot_response.strip().startswith("/search") and not self._suppress_auto_search:
             query = self.last_bot_response.strip()[len("/search"):].strip()
             self.ui.add_system_message(f"AI initiated search for: {query}")
             info = scrape_medical_info(query)
-            self.ui.add_bot_message(info if info else "No information found.")
+            if not info:
+                self.ui.add_bot_message("No information found.")
+            else:
+                # add findings to context and re-run the model so the final answer includes the evidence
+                self.context.add_interaction({"role": "system", "content": f"Search results for '{query}':\n{info}"})
+                self._suppress_auto_search = True
+                self.get_response()
+                return
+        # reset suppression after it's been used
+        if self._suppress_auto_search:
+            self._suppress_auto_search = False
     def handle_error(self, error_msg: str):
         self.ui.update_last_bot_message(error_msg)
         self.ui.progress_bar.setVisible(False)
