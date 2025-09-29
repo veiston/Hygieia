@@ -1,4 +1,4 @@
-# Hygieia – Local, Private Medical Assistant
+# Hygieia – Local, Private Medical Assistant 👩‍⚕️🏥
 
 Hygieia is an offline medical guidance assistant that delivers high-quality medical knowledge privately. It supports text, images, and document import, with optional fact-checking from trusted sources.
 
@@ -40,11 +40,6 @@ venv\Scripts\activate
 pip install -r requirements.txt
 python Hygieia-AI.py
 ```
-
-```
-
-Tip: `Hygieia.bat` can launch the app; verify the path.
-
 ---
 
 ## Using the GUI
@@ -102,4 +97,3 @@ Help wanted: fact-check improvements, unit tests, prompt verification.
 This project is GPL-3.0 licensed.
 
 Credits to Ollama, PyQt6, BeautifulSoup, PyPDF2, python-docx, and python-pptx.
-```
