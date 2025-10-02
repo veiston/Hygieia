@@ -65,7 +65,7 @@ Shortcuts:
 ## Privacy & Security
 
 - All AI inference is local.
-- Web searches expose query data; avoid `/search` for offline-only use.
+- Web searches expose some bits of user prompt data; avoid `/search` for offline-only use.
 - Use trusted models, review sources, and avoid identifiable patient data without consent.
 
 ---
