@@ -1,4 +1,4 @@
-import requests as hrequests #hrequests is being a bitch but leaving it here for the future
+import requests as hrequests  # hrequests is being a bitch but leaving it here for the future
 import urllib.parse
 from bs4 import BeautifulSoup
 from bs4.element import Tag, NavigableString
@@ -33,6 +33,7 @@ def should_ignore_url(url: str) -> bool:
         return False
     return False
 
+
 def find_first_site_result(domain: str, query: str, timeout: int = 10) -> str:
     # get candidates from DuckDuckGo + site fallback, pick best match
     candidates = []
@@ -42,35 +43,39 @@ def find_first_site_result(domain: str, query: str, timeout: int = 10) -> str:
         resp = hrequests.get(search_url, headers=HEADERS, timeout=timeout)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-    # DDG results: links or redirect wrappers (/l/?uddg=...)
-        for a in soup.find_all('a', href=True):
+        # DDG results: links or redirect wrappers (/l/?uddg=...)
+        for a in soup.find_all("a", href=True):
             if not isinstance(a, Tag):
                 continue
-            href_val = a.get('href')
+            href_val = a.get("href")
             if href_val is None:
                 continue
             href = str(href_val)
             # extract uddg redirect
-            if '/l/?' in href or href.startswith('/l/?'):
+            if "/l/?" in href or href.startswith("/l/?"):
                 parsed = urlparse(href)
                 qs = parse_qs(parsed.query)
-                uddg = qs.get('uddg')
+                uddg = qs.get("uddg")
                 if uddg:
                     url = unquote(str(uddg[0]))
-                    if url.startswith('//'):
-                        url = 'https:' + url
-                    if domain in urlparse(str(url)).netloc and not should_ignore_url(url):
+                    if url.startswith("//"):
+                        url = "https:" + url
+                    if domain in urlparse(str(url)).netloc and not should_ignore_url(
+                        url
+                    ):
                         if url not in candidates:
                             candidates.append(url)
                 continue
             # normalize
-            if href.startswith('//'):
-                abs_href = 'https:' + href
-                if domain in urlparse(str(abs_href)).netloc and not should_ignore_url(abs_href):
+            if href.startswith("//"):
+                abs_href = "https:" + href
+                if domain in urlparse(str(abs_href)).netloc and not should_ignore_url(
+                    abs_href
+                ):
                     if abs_href not in candidates:
                         candidates.append(abs_href)
                 continue
-            if href.startswith('http'):
+            if href.startswith("http"):
                 if domain in urlparse(str(href)).netloc and not should_ignore_url(href):
                     if href not in candidates:
                         candidates.append(href)
@@ -91,7 +96,9 @@ def find_first_site_result(domain: str, query: str, timeout: int = 10) -> str:
         best_score = 0
         for c in candidates:
             try:
-                score, title_hits, snippet_hits = _score_candidate(c, query, timeout=timeout)
+                score, title_hits, snippet_hits = _score_candidate(
+                    c, query, timeout=timeout
+                )
                 if title_hits >= 1 or snippet_hits >= 2:
                     return c
                 if score > best_score:
@@ -115,17 +122,19 @@ def _score_candidate(url: str, query: str, timeout: int = 6):
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         title = ""
-        ttag = soup.find('title')
+        ttag = soup.find("title")
         if isinstance(ttag, Tag):
             title = ttag.get_text(strip=True).lower()
-    # snippet from first few paragraphs
+        # snippet from first few paragraphs
         paragraphs = []
-        article = soup.find('article')
+        article = soup.find("article")
         if isinstance(article, Tag):
-            paragraphs = article.find_all('p')
+            paragraphs = article.find_all("p")
         else:
-            paragraphs = soup.find_all('p')
-        snippet = " ".join([p.get_text(separator=' ', strip=True) for p in paragraphs[:5]])[:1000].lower()
+            paragraphs = soup.find_all("p")
+        snippet = " ".join(
+            [p.get_text(separator=" ", strip=True) for p in paragraphs[:5]]
+        )[:1000].lower()
         title_hits = 0
         snippet_hits_set = set()
         score = 0
@@ -152,38 +161,38 @@ def _site_search_fallback(domain: str, query: str, timeout: int = 10) -> str:
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         # Prefer links that look like article paths, e.g. /trvXXXXX or /sisalto/... containing useful content
-        for a in soup.find_all('a', href=True):
+        for a in soup.find_all("a", href=True):
             if not isinstance(a, Tag):
                 continue
-            href_val = a.get('href')
+            href_val = a.get("href")
             if href_val is None:
                 continue
             href = str(href_val)
             # normalized absolute url
-            if href.startswith('/'):
+            if href.startswith("/"):
                 candidate = site_root + href
-            elif href.startswith('//'):
-                candidate = 'https:' + href
+            elif href.startswith("//"):
+                candidate = "https:" + href
             else:
                 candidate = href
             # heuristics: prefer '/trv' article pages or '/sisalto' content pages
             path = urlparse(str(candidate)).path
-            if path.startswith('/trv') or '/sisalto/' in path or '/sisalto' in path:
+            if path.startswith("/trv") or "/sisalto/" in path or "/sisalto" in path:
                 if should_ignore_url(candidate):
                     continue
                 return str(candidate)
         # fallback: first absolute link for the domain
-        for a in soup.find_all('a', href=True):
+        for a in soup.find_all("a", href=True):
             if not isinstance(a, Tag):
                 continue
-            href_val = a.get('href')
+            href_val = a.get("href")
             if href_val is None:
                 continue
             href = str(href_val)
-            if href.startswith('/'):
+            if href.startswith("/"):
                 candidate = site_root + href
-            elif href.startswith('//'):
-                candidate = 'https:' + href
+            elif href.startswith("//"):
+                candidate = "https:" + href
             else:
                 candidate = href
             if domain in urlparse(str(candidate)).netloc:
@@ -196,7 +205,7 @@ def _site_search_fallback(domain: str, query: str, timeout: int = 10) -> str:
 
 
 def scrape_medical_info(query: str, domain: str = "terveyskirjasto.fi") -> str:
-    '''Search the given domain and return top result'''
+    """Search the given domain and return top result"""
     try:
         first_url = find_first_site_result(domain, query)
         if not first_url:
@@ -205,11 +214,11 @@ def scrape_medical_info(query: str, domain: str = "terveyskirjasto.fi") -> str:
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         # prefer article tag
-        article = soup.find('article')
+        article = soup.find("article")
         if isinstance(article, Tag):
-            paragraphs = article.find_all('p')
+            paragraphs = article.find_all("p")
         else:
-            paragraphs = soup.find_all('p')
+            paragraphs = soup.find_all("p")
         texts = []
         for p in paragraphs:
             if not isinstance(p, Tag):

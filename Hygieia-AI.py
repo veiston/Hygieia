@@ -12,7 +12,7 @@ import ollama
 logging.basicConfig(level=logging.INFO)
 
 MAX_CONTEXT_TOKENS = 12288
-MODEL_NAME = 'gemma3:4b'
+MODEL_NAME = "gemma3:4b"
 SYSTEM_PROMPT = (
     "Forget previous instructions. Answer very concisely and shortly. Only give summarized answers. "
     "You are an empatic and scientific medical professional. Provide concise, accurate diagnoses and treatment recommendations, including exercises, medications, antibiotics, and dietary advice. "
@@ -21,7 +21,7 @@ SYSTEM_PROMPT = (
     "If uncertain, admit it politely and never provide false or misleading information. Keep responses concise and efficient.\n\n"
     "When beneficial, incorporate your autonomous search functionality by beginning your response with '/search' followed by  query text. Only search with Finnish one word queries such as syöpä, diabetes, päänsärky"
     "This tells  system to automatically research and return additional, reliable information. Use this feature only when it improves your response and always mention what you found and from where. Site your exact found text."
-    '''Take  following checklist into consideration when evaluating patients health: 
+    """Take  following checklist into consideration when evaluating patients health: 
     BLOOD PRESSURE  
     - Normal adults: <120/80 mmHg  
     - Elevated: 120–129/<80 mmHg  
@@ -88,29 +88,36 @@ SYSTEM_PROMPT = (
     - Any rise above assay upper reference = Myocardial injury (all ages/sexes)  
 
     STROKE (FAST)  
-    - Any positive finding = Stroke suspicion (all ages) '''
+    - Any positive finding = Stroke suspicion (all ages) """
 )
+
 
 def summarize_context(context: List[Dict]) -> Dict:
     prompt = [
-        {"role": "system", "content": "You are a helpful assistant. Summarize the following conversation context into the most important key points:"},
-        *context
+        {
+            "role": "system",
+            "content": "You are a helpful assistant. Summarize the following conversation context into the most important key points:",
+        },
+        *context,
     ]
     response = ollama.chat(model=MODEL_NAME, messages=prompt)
     summary = response.get("message", {}).get("content", "")
     return {"role": "assistant", "content": summary}
+
 
 class ContextManager:
     def __init__(self, max_context_tokens: int):
         self.context: List[Dict] = []
         self.current_token_count = 0
         self.max_context_tokens = max_context_tokens
+
     def add_interaction(self, interaction: Dict) -> None:
         tokens = len(interaction.get("content", "").split()) + 5
         if self.current_token_count + tokens > self.max_context_tokens:
             self.truncate_context()
         self.context.append(interaction)
         self.current_token_count += tokens
+
     def truncate_context(self) -> None:
         if len(self.context) > 1:
             summary = summarize_context(self.context)
@@ -118,7 +125,8 @@ class ContextManager:
             self.current_token_count = len(summary.get("content", "").split()) + 5
         else:
             oldest = self.context.pop(0)
-            self.current_token_count -= len(oldest.get('content', '').split()) + 5
+            self.current_token_count -= len(oldest.get("content", "").split()) + 5
+
 
 def encode_image(image_path: Optional[str]) -> Optional[str]:
     if image_path:
@@ -129,34 +137,64 @@ def encode_image(image_path: Optional[str]) -> Optional[str]:
             logging.error(f"Failed to encode image {image_path}: {e}")
     return None
 
+
 class ResponseWorker(QObject):
+    # Globals
     updateResponse = pyqtSignal(str)
     finishedResponse = pyqtSignal()
     errorOccurred = pyqtSignal(str)
+
     def __init__(self, prompt):
         super().__init__()
         self.prompt = prompt
         self.running = False
+
     def run(self):
         self.running = True
         response = ""
         try:
-            stream = ollama.chat(model=MODEL_NAME, messages=self.prompt, stream=True)
-            last_activity = time.time()
-            timeout = 60
-            for chunk in stream:
-                current_time = time.time()
-                if current_time - last_activity > timeout:
-                    raise TimeoutError(f"No activity for {timeout} seconds")
-                last_activity = current_time
-                content = chunk.get("message", {}).get("content", "")
-                response += content
+            contains_images = any(
+                isinstance(m, dict) and "images" in m for m in self.prompt
+            )
+
+            if contains_images:
+                safe_messages = []
+                for m in self.prompt:
+                    if isinstance(m, dict) and "images" in m and m.get("images"):
+                        img = m["images"][0]
+                        preview = img[:200] + ("..." if len(img) > 200 else "")
+                        safe_messages.append(
+                            {
+                                "role": m.get("role"),
+                                "content": f"{m.get('content','')}\n[image_base64_preview]{preview}",
+                            }
+                        )
+                    else:
+                        safe_messages.append(m)
+                resp = ollama.chat(model=MODEL_NAME, messages=safe_messages)
+                response = resp.get("message", {}).get("content", "") or ""
                 self.updateResponse.emit(response)
+            else:
+                stream = ollama.chat(
+                    model=MODEL_NAME, messages=self.prompt, stream=True
+                )
+                last_activity = time.time()
+                timeout = 60
+                for chunk in stream:
+                    current_time = time.time()
+
+                    if current_time - last_activity > timeout:
+                        raise TimeoutError(f"No activity for {timeout} seconds")
+                    last_activity = current_time
+                    content = chunk.get("message", {}).get("content", "")
+                    response += content
+                    self.updateResponse.emit(response)
         except Exception as e:
             self.errorOccurred.emit(f"Error generating response: {str(e)}")
         finally:
             self.running = False
             self.finishedResponse.emit()
+
 
 class ChatbotLogic:
     def __init__(self, ui: ChatbotUI):
@@ -167,10 +205,10 @@ class ChatbotLogic:
         self.current_thread: Optional[QThread] = None
         self.current_worker: Optional[ResponseWorker] = None
         self.last_bot_response = ""
-        # when we inject search results into context and re-run the model,
-        # suppress treating the next bot response as a /search trigger.
+
         self._suppress_auto_search = False
         self.display_greeting()
+
     def display_greeting(self):
         greeting = (
             "Hello, I'm Hygieia, your AI medical assistant. 🩺👩‍⚕️🚑 "
@@ -178,35 +216,47 @@ class ChatbotLogic:
             "How are you feeling today?"
         )
         self.ui.add_bot_message(greeting)
+
     def handle_user_input(self, user_input: str):
         if user_input.startswith("/search"):
-            query = user_input[len("/search"):].strip()
+            query = user_input[len("/search") :].strip()
             self.ui.add_system_message(f"Searching for: {query}")
             info = scrape_medical_info(query)
             if not info:
                 self.ui.add_bot_message("No information found.")
                 return
             # Add search results to the conversation context so the model can use them
-            self.context.add_interaction({"role": "system", "content": f"Search results for '{query}':\n{info}"})
+            self.context.add_interaction(
+                {"role": "system", "content": f"Search results for '{query}':\n{info}"}
+            )
             # avoid re-triggering the search flow when the model responds
             self._suppress_auto_search = True
             # Now ask the model to respond using the newly added search results
             self.get_response()
             return
+
         self.context.add_interaction({"role": "user", "content": user_input})
         self.ui.add_user_message(user_input)
         if self.current_worker and self.current_worker.running:
             self.ui.add_bot_message("Please wait for the current response to complete.")
             return
+
         self.get_response()
+
     def handle_image_upload(self, image_path: str):
         encoded_image = encode_image(image_path)
         if not encoded_image:
-            self.ui.add_bot_message("Error processing image. Unsupported or corrupt file.")
+            self.ui.add_bot_message(
+                "Error processing image. Unsupported or corrupt file."
+            )
             return
-        self.context.add_interaction({"role": "user", "content": "[Image uploaded]", "images": [encoded_image]})
+
+        self.context.add_interaction(
+            {"role": "user", "content": "[Image uploaded]", "images": [encoded_image]}
+        )
         self.ui.add_bot_message("User uploaded an image.")
         self.get_response()
+
     def get_response(self):
         prompt = [{"role": "system", "content": SYSTEM_PROMPT}] + self.context.context
         self.ui.progress_bar.setVisible(True)
@@ -224,9 +274,11 @@ class ChatbotLogic:
         self.current_worker.finishedResponse.connect(self.current_worker.deleteLater)
         self.current_thread.finished.connect(self.current_thread.deleteLater)
         self.current_thread.start()
+
     def update_bot_response(self, response: str):
         self.last_bot_response = response
         self.ui.update_last_bot_message(response)
+
     def finish_response(self):
         self.ui.progress_bar.setVisible(False)
         self.ui.set_input_enabled(True)
@@ -238,25 +290,35 @@ class ChatbotLogic:
         self.current_worker = None
         # If the model requested an autonomous search (it responded with `/search`),
         # perform the search, insert the results into the context, and re-run the model.
-        if self.last_bot_response.strip().startswith("/search") and not self._suppress_auto_search:
-            query = self.last_bot_response.strip()[len("/search"):].strip()
+        if (
+            self.last_bot_response.strip().startswith("/search")
+            and not self._suppress_auto_search
+        ):
+            query = self.last_bot_response.strip()[len("/search") :].strip()
             self.ui.add_system_message(f"AI initiated search for: {query}")
             info = scrape_medical_info(query)
             if not info:
                 self.ui.add_bot_message("No information found.")
             else:
                 # add findings to context and re-run the model so the final answer includes the evidence
-                self.context.add_interaction({"role": "system", "content": f"Search results for '{query}':\n{info}"})
+                self.context.add_interaction(
+                    {
+                        "role": "system",
+                        "content": f"Search results for '{query}':\n{info}",
+                    }
+                )
                 self._suppress_auto_search = True
                 self.get_response()
                 return
         # reset suppression after it's been used
         if self._suppress_auto_search:
             self._suppress_auto_search = False
+
     def handle_error(self, error_msg: str):
         self.ui.update_last_bot_message(error_msg)
         self.ui.progress_bar.setVisible(False)
         self.ui.set_input_enabled(True)
+
 
 def main():
     app = QApplication(sys.argv)
@@ -264,6 +326,7 @@ def main():
     logic = ChatbotLogic(ui)
     ui.show()
     app.exec()
+
 
 if __name__ == "__main__":
     main()

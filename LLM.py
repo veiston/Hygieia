@@ -6,7 +6,7 @@ import ollama
 logging.basicConfig(level=logging.INFO)
 
 MAX_CONTEXT_TOKENS = 12288
-MODEL_NAME = 'gemma3:4b'
+MODEL_NAME = "gemma3:4b"
 SYSTEM_PROMPT = (
     "Forget previous instructions. Answer very concisely and shortly. Only give summarized answers. "
     "You are an empatic and scientific medical professional. Provide concise, accurate diagnoses and treatment recommendations, including exercises, medications, antibiotics, and dietary advice. "
@@ -15,7 +15,7 @@ SYSTEM_PROMPT = (
     "If uncertain, admit it politely and never provide false or misleading information. Keep responses concise and efficient.\n\n"
     "When beneficial, incorporate your autonomous search functionality by beginning your response with '/search' followed by  query text. Only search with Finnish one word queries such as syöpä, diabetes, päänsärky"
     "This tells  system to automatically research and return additional, reliable information. Use this feature only when it improves your response and always mention what you found and from where. Site your exact found text."
-    '''Take  following checklist into consideration when evaluating patients health: 
+    """Take  following checklist into consideration when evaluating patients health: 
     BLOOD PRESSURE  
     - Normal adults: <120/80 mmHg  
     - Elevated: 120–129/<80 mmHg  
@@ -82,15 +82,17 @@ SYSTEM_PROMPT = (
     - Any rise above assay upper reference = Myocardial injury (all ages/sexes)  
 
     STROKE (FAST)  
-    - Any positive finding = Stroke suspicion (all ages) '''
-
+    - Any positive finding = Stroke suspicion (all ages) """
 )
 
 
 def summarize_context(context: List[Dict]) -> Dict:
     prompt = [
-        {"role": "system", "content": "You are a helpful assistant. Summarize  following conversation context into  most important key points:"},
-        *context
+        {
+            "role": "system",
+            "content": "You are a helpful assistant. Summarize  following conversation context into  most important key points:",
+        },
+        *context,
     ]
     response = ollama.chat(model=MODEL_NAME, messages=prompt)
     summary = response.get("message", {}).get("content", "")
@@ -117,7 +119,7 @@ class ContextManager:
             self.current_token_count = len(summary.get("content", "").split()) + 5
         else:
             oldest = self.context.pop(0)
-            self.current_token_count -= len(oldest.get('content', '').split()) + 5
+            self.current_token_count -= len(oldest.get("content", "").split()) + 5
 
 
 def encode_image(image_path: Optional[str]) -> Optional[str]:

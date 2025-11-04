@@ -1,7 +1,7 @@
 PyQt6
 Markdown
-python-pptx
-python-docx
+python - pptx
+python - docx
 PyPDF2
 hrequests
 beautifulsoup4
