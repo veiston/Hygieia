@@ -26,12 +26,9 @@ Hygieia is an offline medical guidance assistant that delivers quality medical k
 
 ## Quick Start (Windows)
 
-Prerequisites:
-
 - Python 3.10+
-- Ollama installed with a local model (`llava_context`)
-
-Run GUI.py ✅
+- Ollama installed with a local model downloaded (`ollama run llava:latest`)
+- Run GUI.py ✅
 ---
 
 ## Privacy & Security
