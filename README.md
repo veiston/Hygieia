@@ -1,6 +1,6 @@
 # Hygieia 👩‍⚕️🏥 Local, Private Medical Assistant
 
-Hygieia is an offline medical guidance assistant that delivers quality medical knowledge privately. It supports text, images, and document import, with optional fact-checking from trusted sources.
+Hygieia is an offline medical assistant that delivers medical knowledge privately. It supports text, images, and document import, with optional fact-checking from trusted sources.
 
 <img width="598" height="797" alt="Screenshot" src="https://github.com/user-attachments/assets/40dbadd0-959a-4e63-abfc-af9aaef8026f" />
 
@@ -18,9 +18,8 @@ Hygieia is an offline medical guidance assistant that delivers quality medical k
 
 ## What it is – and isn’t ✅
 
-- **Assistant**: suggests diagnoses, next steps, and clinician questions.
+- **Assistant**: suggests diagnoses, next steps, and questions.
 - **Not a replacement** for licensed medical care.
-- Conservative: flags uncertainty and suggests escalation.
 
 ---
 
@@ -33,19 +32,18 @@ Hygieia is an offline medical guidance assistant that delivers quality medical k
 
 ## Privacy & Security
 
-- All AI inference is local.
+- All AI usage is local.
 - Web searches expose some bits of user prompt data to search engines
-- Use trusted models, review sources, and avoid identifiable patient data without consent.
+- Avoid identifiable patient data without consent.
 
 ---
 
-## Maintainers
+## Files
 
 - `Hygieia-AI.py` – main orchestrator
 - `GUI.py` – chat UI
 - `anyFileRead.py` – document parsing
 - `WebSearch.py` – minimal fact-checking
-- Local model calls via `ollama.chat()`
 
 ---
 
